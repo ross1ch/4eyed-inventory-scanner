@@ -6,6 +6,7 @@
   <meta name="viewport"
         content="width=device-width, initial-scale=1">
   <title>4Eyed Records Scanner</title>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -30,35 +31,101 @@
     }
   </style>
 </head>
+
+
 <body>
   <h1>4Eyed Records</h1>
-  <p>Inventory Scanner — Camera Test</p>
+  <p>Inventory Scanner — UPC Test</p>
 
-  <button onclick="startCamera()">Test Camera</button>
-  <p id="status">Camera not started</p>
-  <video id="preview" autoplay playsinline muted></video>
+  <button id="startBtn" onclick="startScanner()">
+    Scan Barcode
+  </button>
+
+  <button id="stopBtn" onclick="stopScanner()"
+          style="display:none">
+    Stop Scanner
+  </button>
+
+  <p id="status">Ready to scan</p>
+  <div id="reader" style="width:100%; max-width:500px; margin:auto;"></div>
+
+  <h3>Scanned UPC</h3>
+  <p id="upc">No barcode scanned yet</p>
 
   <script>
-    async function startCamera() {
+    let scanner = null;
+    let busy = false;
+
+    async function startScanner() {
       const status = document.getElementById('status');
-      const video = document.getElementById('preview');
+
+      if (typeof Html5Qrcode === 'undefined') {
+        status.textContent = 'Scanner library failed to load.';
+        return;
+      }
 
       try {
-        const stream =
-          await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: 'environment' },
-            audio: false
-          });
+        scanner = new Html5Qrcode('reader');
 
-        video.srcObject = stream;
-        await video.play();
-        status.textContent = 'Camera working!';
+        await scanner.start(
+          { facingMode: 'environment' },
+          {
+            fps: 10,
+            qrbox: { width: 250, height: 150 },
+            formatsToSupport: [
+              Html5QrcodeSupportedFormats.UPC_A,
+              Html5QrcodeSupportedFormats.UPC_E,
+              Html5QrcodeSupportedFormats.EAN_13,
+              Html5QrcodeSupportedFormats.EAN_8
+            ]
+          },
+          async (decodedText) => {
+            if (busy) return;
+            busy = true;
+
+            let code = decodedText;
+
+            if (code.length === 13 && code.startsWith('0')) {
+              code = code.substring(1);
+            }
+
+            document.getElementById('upc').textContent = code;
+            status.textContent = 'Barcode scanned successfully!';
+
+            await stopScanner();
+            busy = false;
+          },
+          () => {}
+        );
+
+        document.getElementById('stopBtn').style.display = 'inline-block';
+        document.getElementById('startBtn').style.display = 'none';
+        status.textContent = 'Point camera at UPC barcode';
+
       } catch (error) {
         status.textContent =
-          'Camera error: ' + error.name +
-          ' — ' + error.message;
+          'Scanner error: ' + (error.message || String(error));
       }
+    }
+
+    async function stopScanner() {
+      if (scanner) {
+        try {
+          if (scanner.isScanning) {
+            await scanner.stop();
+          }
+          scanner.clear();
+        } catch (error) {
+          console.log(error);
+        }
+        scanner = null;
+      }
+
+      document.getElementById('stopBtn').style.display = 'none';
+      document.getElementById('startBtn').style.display = 'inline-block';
     }
   </script>
 </body>
+
+
 </html>
