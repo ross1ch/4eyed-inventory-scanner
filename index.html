@@ -51,6 +51,10 @@
 
   <h3>Scanned UPC</h3>
   <p id="upc">No barcode scanned yet</p>
+  <h3>Album Identification</h3>
+<div id="albumResults">
+  Scan a record barcode to search MusicBrainz.
+</div>
 
   <script>
     let scanner = null;
@@ -91,6 +95,7 @@
 
             document.getElementById('upc').textContent = code;
             status.textContent = 'Barcode scanned successfully!';
+            lookupAlbum(code);
 
             await stopScanner();
             busy = false;
@@ -124,6 +129,68 @@
       document.getElementById('stopBtn').style.display = 'none';
       document.getElementById('startBtn').style.display = 'inline-block';
     }
+    
+async function lookupAlbum(upc) {
+  const results = document.getElementById('albumResults');
+
+  results.textContent = 'Searching MusicBrainz...';
+
+  try {
+    const query = 'barcode:' + upc;
+
+    const url =
+      'https://musicbrainz.org/ws/2/release/?query=' +
+      encodeURIComponent(query) +
+      '&fmt=json&limit=5';
+
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      throw new Error('MusicBrainz returned ' + response.status);
+    }
+
+    const data = await response.json();
+    const releases = data.releases || [];
+
+    results.replaceChildren();
+
+    if (!releases.length) {
+      results.textContent =
+        'No UPC match found. Manual album search will be added next.';
+      return;
+    }
+
+    releases.forEach(release => {
+      const artist = (release['artist-credit'] || [])
+        .map(a => a.name || '')
+        .filter(Boolean)
+        .join(', ');
+
+      const item = document.createElement('div');
+      item.style.padding = '12px';
+      item.style.marginBottom = '10px';
+      item.style.background = '#ffffff';
+      item.style.borderRadius = '8px';
+
+      const title = document.createElement('strong');
+      title.textContent = release.title || 'Unknown album';
+
+      const details = document.createElement('p');
+      details.textContent =
+        'Artist: ' + (artist || 'Unknown') +
+        ' | Year: ' + (release.date || 'Unknown') +
+        ' | Country: ' + (release.country || 'Unknown');
+
+      item.append(title, details);
+      results.appendChild(item);
+    });
+
+  } catch (error) {
+    results.textContent =
+      'Lookup failed: ' + (error.message || String(error));
+  }
+}
+
   </script>
 </body>
 
